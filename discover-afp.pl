@@ -3,6 +3,10 @@
 use strict;
 use warnings;
 
+# Initialize Log::Log4perl to suppress warnings
+use Log::Log4perl qw(:easy);
+Log::Log4perl->easy_init($ERROR);  # Only log errors
+
 use Net::Bonjour;
 use Net::AFP::TCP;
 use Data::Dumper;
@@ -23,10 +27,57 @@ GetOptions(
 
 # Display help if requested
 if ($help) {
-    pod2usage({
-        -verbose => 2,  # Show full help
-        -exitval => 0,  # Exit with status 0 after displaying help
-    });
+    # Check if perl-doc is installed
+    eval {
+        require Pod::Usage;
+        Pod::Usage->import();
+    };
+    if ($@) {
+        # Fallback help message if perl-doc is not installed
+        print <<"HELP";
+NAME
+    discover-afp.pl - Discover and display AFP (Apple Filing Protocol) service information.
+
+SYNOPSIS
+    discover-afp.pl [options]
+
+OPTIONS
+    -f, --fields <field1,field2,...>  Specify fields to display (comma-separated).
+    -h, --help                        Display this help message.
+
+DESCRIPTION
+    This script discovers AFP services over TCP (mDNS) and optionally over AppleTalk (if supported).
+    It displays information about the discovered services based on the specified fields.
+
+FIELDS
+    The following fields can be displayed:
+      - ServerName: The name of the AFP server.
+      - UTF8ServerName: The UTF-8 encoded name of the AFP server.
+      - MachineType: The type of machine running the AFP server.
+      - AFPVersions: The supported AFP versions.
+      - UAMs: The User Authentication Methods supported by the server.
+      - NetworkAddresses: The network addresses of the server (IPv4 and AppleTalk).
+      - VolumeIcon: The icon associated with the server (if available).
+
+EXAMPLES
+    1. Display default fields for all discovered AFP services:
+       ./discover-afp.pl
+
+    2. Display specific fields (ServerName, MachineType, AFPVersions):
+       ./discover-afp.pl --fields ServerName,MachineType,AFPVersions
+
+    3. Display help message:
+       ./discover-afp.pl --help
+
+HELP
+        exit(0);
+    } else {
+        # Display full help using Pod::Usage
+        pod2usage({
+            -verbose => 2,  # Show full help
+            -exitval => 0,  # Exit with status 0 after displaying help
+        });
+    }
 }
 
 # If no fields are specified, use the default fields
@@ -77,7 +128,21 @@ sub display_fields {
         if (exists $srvInfo->{$field}) {
             print "$field: ";
             if (ref($srvInfo->{$field}) eq 'ARRAY') {
-                print join(", ", @{$srvInfo->{$field}}), "\n";
+                if ($field eq 'NetworkAddresses') {
+                    # Special handling for NetworkAddresses
+                    print "\n";
+                    for my $addr (@{$srvInfo->{$field}}) {
+                        if ($addr->{family} == 2) {
+                            print "  - IPv4 Address: $addr->{address}\n";
+                        } elsif ($addr->{family} == 5) {
+                            print "  - AppleTalk Address: $addr->{address} (Port: $addr->{port})\n";
+                        } else {
+                            print "  - Unknown Address Family: $addr->{address}\n";
+                        }
+                    }
+                } else {
+                    print join(", ", @{$srvInfo->{$field}}), "\n";
+                }
             } elsif (ref($srvInfo->{$field}) eq 'HASH') {
                 print Dumper($srvInfo->{$field});
             } else {
@@ -117,18 +182,18 @@ The following fields can be displayed:
   - MachineType: The type of machine running the AFP server.
   - AFPVersions: The supported AFP versions.
   - UAMs: The User Authentication Methods supported by the server.
-  - NetworkAddresses: The network addresses of the server.
+  - NetworkAddresses: The network addresses of the server (IPv4 and AppleTalk).
   - VolumeIcon: The icon associated with the server (if available).
 
 =head1 EXAMPLES
 
 1. Display default fields for all discovered AFP services:
-   discover-afp.pl
+   ./discover-afp.pl
 
 2. Display specific fields (ServerName, MachineType, AFPVersions):
-   discover-afp.pl --fields ServerName,MachineType,AFPVersions
+   ./discover-afp.pl --fields ServerName,MachineType,AFPVersions
 
 3. Display help message:
-   discover-afp.pl --help
+   ./discover-afp.pl --help
 
 =cut

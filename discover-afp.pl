@@ -98,8 +98,17 @@ eval {
 my $mdns = new Net::Bonjour('afpovertcp', 'tcp');
 $mdns->discover();
 
+# Track processed hosts to avoid duplicates
+my %processed_hosts;
+
 foreach my $entry ($mdns->entries()) {
-    print "For host ", $entry->name(), ":\n";
+    my $hostname = $entry->name();
+
+    # Skip if this host has already been processed
+    next if exists $processed_hosts{$hostname};
+    $processed_hosts{$hostname} = 1;
+
+    print "For host $hostname:\n";
     my $srvInfo;
     my $rc = Net::AFP::TCP->GetStatus($entry->address(), $entry->port(), \$srvInfo);
     display_fields($srvInfo);
@@ -115,7 +124,13 @@ eval {
 } or carp('AppleTalk stack probably out of order');
 
 foreach my $entry (@results) {
-    print "For host ", $entry->[3], ":\n";
+    my $hostname = $entry->[3];
+
+    # Skip if this host has already been processed
+    next if exists $processed_hosts{$hostname};
+    $processed_hosts{$hostname} = 1;
+
+    print "For host $hostname:\n";
     my $srvInfo;
     my $rc = Net::AFP::Atalk->GetStatus($entry->[0], $entry->[1], \$srvInfo);
     display_fields($srvInfo);

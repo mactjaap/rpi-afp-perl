@@ -1,7 +1,3 @@
-
-```
-
-
 Install and run AFP-Perl on your Raspberry Pi.
 
 ## Installation
